@@ -26,7 +26,7 @@ typedef struct StructLinkedNode {
 
 static pGraph graph = NULL;
 
-pGraph createGraph(int size, int createNodes) {
+pGraph createGraph(int size) {
 
     pGraph ret = (pGraph) malloc(sizeof (Graph));
 
@@ -38,15 +38,13 @@ pGraph createGraph(int size, int createNodes) {
         if (ret->nodes != NULL) {
             int err = FALSE;
 
-            if (createNodes) {
-                for (i = 0; i < size && !err; i++) {
-                    ret->nodes[i] = (pNode) malloc(sizeof (Node));
-                    if (ret->nodes[i] == NULL) {
-                        err = TRUE;
-                    } else {
-                        ret->nodes[i]->id = 'A' + i;
-                        ret->nodes[i]->step = FALSE;
-                    }
+            for (i = 0; i < size && !err; i++) {
+                ret->nodes[i] = (pNode) malloc(sizeof (Node));
+                if (ret->nodes[i] == NULL) {
+                    err = TRUE;
+                } else {
+                    ret->nodes[i]->id = 'A' + i;
+                    ret->nodes[i]->step = FALSE;
                 }
             }
 
@@ -81,36 +79,24 @@ pGraph createGraph(int size, int createNodes) {
 
     }
 
-    if (createNodes) {
-        graph = ret;
-    }
+    graph = ret;
 
     return ret;
 }
 
-void destroyGraph(pGraph graphArgument, int destroyNodes) {
-    pGraph target;
-
-    if (graphArgument == NULL) {
-        target = graph;
-    } else {
-        target = graphArgument;
-    }
+void destroyGraph() {
+    pGraph target = graph;
+    int i = 0;
 
     free(target->edges);
-    if (destroyNodes) {
-        int i = 0;
-        for (; i < target->size; i++) {
-            free(target->nodes[i]);
-        }
+    for (; i < target->size; i++) {
+        free(target->nodes[i]);
     }
 
     free(target->nodes);
     free(target);
 
-    if (graphArgument == NULL) {
-        graph = NULL;
-    }
+    graph = NULL;
 }
 
 typedef struct {
@@ -151,7 +137,7 @@ static int lowerPath(int * paths) {
 }
 
 static pPathNode addPathNode(int u, pPathNode lastPathNode) {
-    pPathNode pathNode = (pPathNode) malloc(sizeof(PathNode));
+    pPathNode pathNode = (pPathNode) malloc(sizeof (PathNode));
 
     if (pathNode == NULL) {
         printf("Error while allocating memory for dijkstra\n");
@@ -160,7 +146,7 @@ static pPathNode addPathNode(int u, pPathNode lastPathNode) {
 
     pathNode->node = graph->nodes[u];
     pathNode->next = lastPathNode;
-    
+
     return pathNode;
 }
 
@@ -205,9 +191,9 @@ static pPath dijkstra(int src, int dst) {
                 }
             }
 
-        } while (!allStepped() && !found);
+        } while (!found && !allStepped());
 
-        ret = (pPath) malloc(sizeof(Path));
+        ret = (pPath) malloc(sizeof (Path));
 
         if (ret == NULL) {
             printf("Error while allocating memory for dijkstra\n");
@@ -215,14 +201,14 @@ static pPath dijkstra(int src, int dst) {
         }
 
         ret->totalWeight = dist[u];
-        
+
         while (prev[u] != UNDEFINED) {
             lastPathNode = addPathNode(u, lastPathNode);
             u = prev[u];
         }
 
         ret->first = addPathNode(u, lastPathNode);
-        
+
         free(prev);
         free(dist);
     }
@@ -291,7 +277,7 @@ static void destroyPath(pPath path) {
 }
 
 void test(void) {
-    createGraph(6, TRUE);
+    createGraph(6);
     addEdge('A', 'B', 7);
     addEdge('A', 'C', 9);
     addEdge('A', 'F', 14);
@@ -305,5 +291,5 @@ void test(void) {
     pPath p = dijkstra(4, 0);
     printPath(p);
     destroyPath(p);
-    destroyGraph(NULL, TRUE);
+    destroyGraph(NULL);
 }
