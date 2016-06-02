@@ -13,18 +13,26 @@ typedef struct {
     int step; // dijkstra
 } Node, *pNode;
 
+typedef struct StructLinkedNode {
+    struct StructLinkedNode * next;
+    pNode node;
+} PathNode, *pPathNode;
+
+typedef struct {
+    pPathNode first;
+    int totalWeight;
+} Path, *pPath;
+
 typedef struct {
     int * edges;
     pNode * nodes;
     int size;
 } Graph, *pGraph;
 
-typedef struct StructLinkedNode {
-    struct StructLinkedNode * next;
-    pNode node;
-} PathNode, *pPathNode;
-
 static pGraph graph = NULL;
+
+static void destroyPath(pPath path);
+static void printPath(pPath path);
 
 pGraph createGraph(int size) {
 
@@ -98,11 +106,6 @@ void destroyGraph() {
 
     graph = NULL;
 }
-
-typedef struct {
-    pPathNode first;
-    int totalWeight;
-} Path, *pPath;
 
 static void initDijkstra(int * pathSizes, int * previous) {
     int i;
@@ -216,12 +219,57 @@ static pPath dijkstra(int src, int dst) {
     return ret;
 }
 
+static pPath * artificialEdges = NULL;
+
+static void createArtificialEdges(void) {
+    if (graph != NULL && artificialEdges == NULL) {
+        int i, j, size = graph->size;
+
+        artificialEdges = (pPath *) malloc(sizeof (pPath) * size * size);
+
+        if (artificialEdges == NULL) {
+            printf("Error while creating artificial edges\n");
+            exit(-1);
+        }
+
+        for (i = 0; i < size; i++) {
+            for (j = 0; j < size; j++) {
+                int edge = i * size + j;
+                if (graph->edges[edge] == 0 && i != j) {
+                    int reverseEdge = j * size + i;
+                    pPath p = dijkstra(i, j);
+                    graph->edges[edge] = graph->edges[reverseEdge] = p->totalWeight;
+                    artificialEdges[edge] = artificialEdges[reverseEdge] = p;
+                } else {
+                    artificialEdges[edge] = NULL;
+                }
+            }
+        }
+    }
+}
+
+static void destroyArtificialEdges(void) {
+    if (artificialEdges != NULL) {
+        int size = graph->size;
+        int i;
+        int j;
+        for (i = 0; i < size; i++) {
+            for (j = 0; j < size; j++) {
+                int e = i * size + j;
+                if (artificialEdges[e] != NULL) {
+                    destroyPath(artificialEdges[e]);
+                    artificialEdges[j * size + i] = NULL;
+                }
+            }
+        }
+        free(artificialEdges);
+    }
+}
+
 /*
 
+
 // return true or false
-int createArtificialEdges(void);
-// return true or false
-int destroyArtificialEdges(void);
 // return -1 in case of failure, positive integer as the weight of the path
 int getCircularPathWeight(int index);
 
@@ -256,7 +304,7 @@ static void printEdges() {
     }
 }
 
-static void printPath(pPath path) {
+void printPath(pPath path) {
     pPathNode it = path->first;
     printf("Total weight: %d\n", path->totalWeight);
     while (it != NULL) {
@@ -266,7 +314,7 @@ static void printPath(pPath path) {
     printf("\n");
 }
 
-static void destroyPath(pPath path) {
+void destroyPath(pPath path) {
     pPathNode it = path->first;
     while (it != NULL) {
         pPathNode old = it;
@@ -274,6 +322,19 @@ static void destroyPath(pPath path) {
         free(old);
     }
     free(path);
+}
+
+void printRealPath(pPath p) {
+    if(graph != NULL && artificialEdges != NULL) {
+        if(p != NULL && p->first != NULL && p->first->next != NULL) {
+            int b = p->first->node->id - 'A';
+            int e = p->first->next->node->id - 'A';
+            pPath realPath = artificialEdges[b * graph->size + e];
+            if(realPath != NULL) {
+                printPath(realPath);
+            }
+        }
+    }
 }
 
 void test(void) {
@@ -287,9 +348,12 @@ void test(void) {
     addEdge('C', 'F', 2);
     addEdge('D', 'E', 6);
     addEdge('F', 'E', 9);
+    createArtificialEdges();
     //printEdges();
-    pPath p = dijkstra(4, 0);
+    pPath p = dijkstra(0, 4);
     printPath(p);
+    printRealPath(p);
+    destroyArtificialEdges();
     destroyPath(p);
     destroyGraph(NULL);
 }
