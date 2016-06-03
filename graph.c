@@ -48,7 +48,7 @@ static unsigned int factorial(unsigned int n);
 static int getWeightFromNodes(pNode src, pNode dst);
 static void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey);
 
-static void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey) {
+void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey) {
 	int i;
 	*lower = INT_MAX;
 	*lowerKey = -1;
@@ -67,7 +67,92 @@ unsigned int factorial(unsigned int n) {
 }
 
 pPath getPathFromIndex(int start, int idx) {
+	pPath ret = (pPath) malloc(sizeof(Path));
+	pNode * others = (pNode*) malloc(sizeof (pNode) * (graph->size - 1));
+    pPathNode pathNode;
+	pPathNode lastPathNode = pathNode;
+    int countNotUsed = graph->size - 1;
+    int i, j;
+    pNode startNode = graph->nodes[start];
+    pNode src;
+    pNode dst;
 
+    if (others == NULL || ret == NULL) {
+        printf("ERROR WHILE ALLOCATING MEMORY TO GET WEIGHT FROM INDEX\n");
+        exit(-1);
+    }
+
+	ret->first = NULL;
+	ret->weight = 0;
+	
+    for (j = 0, i = 0; i < graph->size; i++) {
+        if (i != start) {
+            others[j++] = graph->nodes[i];
+        }
+    }
+
+    src = startNode;
+
+    pathNode = (pPathNode) malloc(sizeof (PathNode));
+
+    if (pathNode == NULL) {
+        printf("Error while allocating memory to create path\n");
+        exit(-1);
+    }
+	
+	pathNode->node = src;
+	ret->first = pathNode;
+	
+    while (countNotUsed-- > 0) {
+		lastPathNode = pathNode;
+        int size = (graph->size - (graph->size - countNotUsed));
+        int fact = factorialHashTable[size];
+        int dstCount = 0;
+        pNode selected = NULL;
+        int dstN = idx / fact;
+        idx %= fact;
+        for (i = 0; i < (graph->size - 1) && selected == NULL; i++) {
+            if (others[i] != NULL) {
+                if (dstCount++ == dstN) {
+                    selected = others[i];
+                    others[i] = NULL;
+                }
+            }
+        }
+
+        dst = selected;
+
+        ret->weight += getWeightFromNodes(src, dst);
+        src = dst;
+		
+		pathNode = (pPathNode) malloc(sizeof (PathNode));
+
+		if (pathNode == NULL) {
+			printf("Error while allocating memory to create path\n");
+			exit(-1);
+		}
+		
+		pathNode->node = src;
+		lastPathNode->next = pathNode;
+	}
+
+    dst = startNode;
+    ret += getWeightFromNodes(src, dst);
+
+	pathNode = (pPathNode) malloc(sizeof (PathNode));
+
+	if (pathNode == NULL) {
+		printf("Error while allocating memory to create path\n");
+		exit(-1);
+	}
+	
+	pathNode->node = dst;
+	pathNode->next = NULL;
+	lastPathNode->next = pathNode;
+	
+    free(others);
+	
+	return ret;
 }
 
 int getWeightFromNodes(pNode src, pNode dst) {
@@ -484,14 +569,16 @@ void test(void) {
 		int fact = factorialHashTable[graph->size - 1] / 2;
 		int lower;
 		int key;
+		pPath p;
 		
 		getLowerPath(0, 0, fact, &lower, &key);
+		
+		p = getPathFromIndex(0, key);
+		printPath(p);
+		printRealPath(p);
+		destroyPath(p);
 	}
 	
-    pPath p = dijkstra(0, 2);
-    printPath(p);
-    printRealPath(p);
     destroyArtificialEdges();
-    destroyPath(p);
     destroyGraph();
 }
