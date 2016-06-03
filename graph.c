@@ -46,6 +46,21 @@ static int getWeightFromIndex(int start, int idx);
 static pPath getPathFromIndex(int start, int idx);
 static unsigned int factorial(unsigned int n);
 static int getWeightFromNodes(pNode src, pNode dst);
+static void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey);
+
+static void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey) {
+	int i;
+	*lower = INT_MAX;
+	*lowerKey = -1;
+	
+    for(i = start; i < end; i++) {
+        int w = getWeightFromIndex(startNode, i);
+		if(w < *lower) {
+			*lower = w;
+			*lowerKey = i;
+		}
+    }
+}
 
 unsigned int factorial(unsigned int n) {
     return n <= 1 ? 1 : n * factorial(n - 1);
@@ -464,12 +479,14 @@ void test(void) {
     
     createArtificialEdges();
     //printEdges();
-    int fact = factorialHashTable[graph->size - 1];
-    int i;
 	
-    for(i = 0; i < fact; i++) {
-        getWeightFromIndex(0, i);
-    }
+	{
+		int fact = factorialHashTable[graph->size - 1] / 2;
+		int lower;
+		int key;
+		
+		getLowerPath(0, 0, fact, &lower, &key);
+	}
 	
     pPath p = dijkstra(0, 2);
     printPath(p);
