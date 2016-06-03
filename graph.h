@@ -3,6 +3,9 @@
 
 void test(void);
 
+void createGraph(int size);
+void destroyGraph(void);
+
 /*
 // return true or false
 int createGraph(int size);
