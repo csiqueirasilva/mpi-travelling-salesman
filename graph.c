@@ -31,6 +31,7 @@ typedef struct {
 
 static pGraph graph = NULL;
 static pPath * artificialEdges = NULL;
+static int * factorialHashTable = NULL;
 
 static void destroyPath(pPath path);
 static void printPath(pPath path);
@@ -84,7 +85,7 @@ int getWeightFromIndex(int start, int idx) {
     
     while (countNotUsed-- > 0) {
         int size = (graph->size - (graph->size - countNotUsed));
-        int fact = factorial(size);
+        int fact = factorialHashTable[size];
         int dstCount = 0;
         pNode selected = NULL;
         int dstN = idx / fact;
@@ -150,7 +151,17 @@ void createGraph(int size) {
                     graph = NULL;
                     printf("Error while allocating memory to create graph\n");
                     exit(-1);
-                }
+                } else {
+					factorialHashTable = (int*) malloc(sizeof(int) * size);
+					if(factorialHashTable == NULL) {
+						printf("Error while allocating memory to create factorial hash table\n");
+						exit(-1);
+					}
+					
+					for(i = 0; i < size; i++) {
+						factorialHashTable[i] = factorial(i);
+					}
+				}
 
             } else {
 
@@ -174,7 +185,7 @@ void createGraph(int size) {
             printf("Error while allocating memory to create graph\n");
             exit(-1);
         }
-
+		
     }
 
 }
@@ -193,8 +204,10 @@ void destroyGraph(void) {
         free(graph->nodes);
         free(graph);
 
+		free(factorialHashTable);
     }
-
+	
+	factorialHashTable = NULL;
     graph = NULL;
 }
 
@@ -451,11 +464,13 @@ void test(void) {
     
     createArtificialEdges();
     //printEdges();
-    int fact = factorial(graph->size - 1);
+    int fact = factorialHashTable[graph->size - 1];
     int i;
+	
     for(i = 0; i < fact; i++) {
         getWeightFromIndex(0, i);
     }
+	
     pPath p = dijkstra(0, 2);
     printPath(p);
     printRealPath(p);
