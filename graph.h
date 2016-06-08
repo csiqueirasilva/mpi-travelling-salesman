@@ -1,7 +1,7 @@
 #ifndef GUARD_C_MPI_GRAPH
 #define GUARD_C_MPI_GRAPH
 
-void test(void);
+void test(int argc, char* argv[]);
 
 void createGraph(int size);
 void destroyGraph(void);

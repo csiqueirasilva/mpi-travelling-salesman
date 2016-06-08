@@ -1,10 +1,15 @@
 #include "graph.h"
 
-//#define GRAPH_PRINT_STEP 0
+#define GRAPH_PRINT_STEP
+//#define USE_MPI_MALLOC
 
 #define TRUE 1
 #define FALSE 0
 #define UNDEFINED -1
+
+#ifdef USE_MPI_MALLOC
+#include <mpi.h>
+#endif
 
 #include <limits.h>
 #include <stdlib.h>
@@ -52,11 +57,44 @@ static pPath getPathFromIndex(int start, int idx);
 static unsigned int factorial(unsigned int n);
 static int getWeightFromNodes(pNode src, pNode dst);
 static void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey);
+static void parallelSolution(int argc, char* argv[]);
+
+#ifdef USE_MPI_MALLOC
+static int taskDivision(int size, int qtt);
+
+int taskDivision(int size, int qtt) {
+    int i;
+    int buffLimit = qtt;
+    int divMaster = 0;
+
+    if (size > 0) {
+
+        divMaster = qtt / size;
+        buffLimit -= divMaster;
+
+        for (i = 1; i < size; i++) {
+            int div = qtt / size;
+            buffLimit -= div;
+            if (buffLimit != 0 && i == (size - 1)) {
+                div += buffLimit;
+            }
+            MPI_Send(&div, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+
+    }
+
+    return divMaster;
+}
+#endif
 
 void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey) {
     int i;
     *lower = INT_MAX;
     *lowerKey = -1;
+
+#ifdef GRAPH_PRINT_STEP
+    printf("searching from %d to %d\n", start, end);
+#endif
 
     for (i = start; i <= end; i++) {
         int w = getWeightFromIndex(startNode, i);
@@ -65,6 +103,10 @@ void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey
             *lowerKey = i;
         }
     }
+
+#ifdef GRAPH_PRINT_STEP
+    printf("finished searching from %d to %d\n", start, end);
+#endif
 }
 
 static void sequentialSolution(void);
@@ -78,7 +120,7 @@ void sequentialSolution(void) {
         createArtificialEdges();
 
         {
-            int fact = factorialHashTable[graph->size - 1] / 2;
+            int fact = factorialHashTable[graph->size - 1] / 2 - 1;
             int lower;
             int key;
             pPath p;
@@ -134,8 +176,9 @@ unsigned int factorial(unsigned int n) {
 }
 
 pPath getPathFromIndex(int start, int idx) {
-    pPath ret = (pPath) malloc(sizeof (Path));
-    pNode * others = (pNode*) malloc(sizeof (pNode) * (graph->size - 1));
+    pPath ret;
+    pNode * others;
+
     pPathNode pathNode;
     pPathNode lastPathNode = pathNode;
     int countNotUsed = graph->size - 1;
@@ -143,6 +186,14 @@ pPath getPathFromIndex(int start, int idx) {
     pNode startNode = graph->nodes[start];
     pNode src;
     pNode dst;
+
+#ifndef USE_MPI_MALLOC
+    ret = (pPath) malloc(sizeof (Path));
+    others = (pNode*) malloc(sizeof (pNode) * (graph->size - 1));
+#else
+    MPI_Alloc_mem(sizeof (Path), MPI_INFO_NULL, &ret);
+    MPI_Alloc_mem(sizeof (pNode) * (graph->size - 1), MPI_INFO_NULL, &others);
+#endif
 
     if (others == NULL || ret == NULL) {
         printf("ERROR WHILE ALLOCATING MEMORY TO GET WEIGHT FROM INDEX\n");
@@ -160,7 +211,11 @@ pPath getPathFromIndex(int start, int idx) {
 
     src = startNode;
 
+#ifndef USE_MPI_MALLOC
     pathNode = (pPathNode) malloc(sizeof (PathNode));
+#else
+    MPI_Alloc_mem(sizeof (PathNode), MPI_INFO_NULL, &pathNode);
+#endif
 
     if (pathNode == NULL) {
         printf("Error while allocating memory to create path\n");
@@ -192,7 +247,11 @@ pPath getPathFromIndex(int start, int idx) {
         ret->totalWeight += getWeightFromNodes(src, dst);
         src = dst;
 
+#ifndef USE_MPI_MALLOC
         pathNode = (pPathNode) malloc(sizeof (PathNode));
+#else
+        MPI_Alloc_mem(sizeof (PathNode), MPI_INFO_NULL, &pathNode);
+#endif
 
         if (pathNode == NULL) {
             printf("Error while allocating memory to create path\n");
@@ -207,7 +266,11 @@ pPath getPathFromIndex(int start, int idx) {
     dst = startNode;
     ret->totalWeight += getWeightFromNodes(src, dst);
 
+#ifndef USE_MPI_MALLOC
     pathNode = (pPathNode) malloc(sizeof (PathNode));
+#else
+    MPI_Alloc_mem(sizeof (PathNode), MPI_INFO_NULL, &pathNode);
+#endif
 
     if (pathNode == NULL) {
         printf("Error while allocating memory to create path\n");
@@ -218,7 +281,11 @@ pPath getPathFromIndex(int start, int idx) {
     pathNode->next = NULL;
     lastPathNode->next = pathNode;
 
+#ifndef USE_MPI_MALLOC
     free(others);
+#else
+    MPI_Free_mem(others);
+#endif
 
     return ret;
 }
@@ -228,13 +295,20 @@ int getWeightFromNodes(pNode src, pNode dst) {
 }
 
 int getWeightFromIndex(int start, int idx) {
-    pNode * others = (pNode*) malloc(sizeof (pNode) * (graph->size - 1));
+
+    pNode * others;
     int ret = 0;
     int countNotUsed = graph->size - 1;
     int i, j;
     pNode startNode = graph->nodes[start];
     pNode src;
     pNode dst;
+
+#ifndef USE_MPI_MALLOC
+    others = (pNode*) malloc(sizeof (pNode) * (graph->size - 1));
+#else
+    MPI_Alloc_mem(sizeof (pNode) * (graph->size - 1), MPI_INFO_NULL, &others);
+#endif
 
     if (others == NULL) {
         printf("ERROR WHILE ALLOCATING MEMORY TO GET WEIGHT FROM INDEX\n");
@@ -284,7 +358,11 @@ int getWeightFromIndex(int start, int idx) {
     printf("%c - %d\n", dst->id, ret);
 #endif
 
+#ifndef USE_MPI_MALLOC
     free(others);
+#else
+    MPI_Free_mem(others);
+#endif
 
     return ret;
 }
@@ -295,18 +373,34 @@ void createGraph(int size) {
         destroyGraph();
     }
 
+#ifndef USE_MPI_MALLOC
     graph = (pGraph) malloc(sizeof (Graph));
+#else
+    MPI_Alloc_mem(sizeof (Graph), MPI_INFO_NULL, &graph);
+#endif
 
     if (graph != NULL) {
         int i;
+
+#ifndef USE_MPI_MALLOC
         graph->nodes = (pNode*) malloc(sizeof (pNode) * size);
+#else
+        MPI_Alloc_mem(sizeof (pNode) * size, MPI_INFO_NULL, &graph->nodes);
+#endif
+
         graph->size = size;
 
         if (graph->nodes != NULL) {
             int err = FALSE;
 
             for (i = 0; i < size && !err; i++) {
+#ifndef USE_MPI_MALLOC
                 graph->nodes[i] = (pNode) malloc(sizeof (Node));
+#else
+                MPI_Alloc_mem(sizeof (Node), MPI_INFO_NULL, &graph->nodes[i]);
+#endif
+
+
                 if (graph->nodes[i] == NULL) {
                     err = TRUE;
                 } else {
@@ -317,16 +411,34 @@ void createGraph(int size) {
 
             if (!err) {
 
+#ifndef USE_MPI_MALLOC
                 graph->edges = (int*) malloc(sizeof (int) * size * size);
+#else
+                MPI_Alloc_mem(sizeof (int) * size * size, MPI_INFO_NULL, &graph->edges);
+#endif
 
                 if (graph->edges == NULL) {
+
+#ifndef USE_MPI_MALLOC
                     free(graph->nodes);
                     free(graph);
+
+#else
+                    MPI_Free_mem(graph->nodes);
+                    MPI_Free_mem(graph);
+#endif
+
                     graph = NULL;
                     printf("Error while allocating memory to create graph\n");
                     exit(-1);
                 } else {
+
+#ifndef USE_MPI_MALLOC
                     factorialHashTable = (int*) malloc(sizeof (int) * size);
+#else
+                    MPI_Alloc_mem(sizeof (int) * size, MPI_INFO_NULL, &factorialHashTable);
+#endif
+
                     if (factorialHashTable == NULL) {
                         printf("Error while allocating memory to create factorial hash table\n");
                         exit(-1);
@@ -342,11 +454,21 @@ void createGraph(int size) {
                 int j;
 
                 for (j = 0; j < i; j++) {
+#ifndef USE_MPI_MALLOC
                     free(graph->nodes[j]);
+#else
+                    MPI_Free_mem(graph->nodes[j]);
+#endif
                 }
 
+#ifndef USE_MPI_MALLOC
                 free(graph->nodes);
                 free(graph);
+#else
+                MPI_Free_mem(graph->nodes);
+                MPI_Free_mem(graph);
+#endif
+
                 graph = NULL;
                 printf("Error while allocating memory to create graph\n");
                 exit(-1);
@@ -354,7 +476,11 @@ void createGraph(int size) {
             }
 
         } else {
+#ifndef USE_MPI_MALLOC
             free(graph);
+#else
+            MPI_Free_mem(graph);
+#endif
             graph = NULL;
             printf("Error while allocating memory to create graph\n");
             exit(-1);
@@ -370,15 +496,30 @@ void destroyGraph(void) {
 
         int i = 0;
 
+#ifndef USE_MPI_MALLOC
         free(graph->edges);
+#else
+        MPI_Free_mem(graph->edges);
+#endif
+
         for (; i < graph->size; i++) {
+#ifndef USE_MPI_MALLOC
             free(graph->nodes[i]);
+#else
+            MPI_Free_mem(graph->nodes[i]);
+#endif
         }
 
+#ifndef USE_MPI_MALLOC
         free(graph->nodes);
         free(graph);
-
         free(factorialHashTable);
+#else
+        MPI_Free_mem(graph->nodes);
+        MPI_Free_mem(graph);
+        MPI_Free_mem(factorialHashTable);
+#endif
+
     }
 
     factorialHashTable = NULL;
@@ -418,7 +559,13 @@ int lowerPath(int * paths) {
 }
 
 pPathNode addPathNode(int u, pPathNode lastPathNode) {
-    pPathNode pathNode = (pPathNode) malloc(sizeof (PathNode));
+    pPathNode pathNode;
+
+#ifndef USE_MPI_MALLOC
+    pathNode = (pPathNode) malloc(sizeof (PathNode));
+#else
+    MPI_Alloc_mem(sizeof (PathNode), MPI_INFO_NULL, &pathNode);
+#endif
 
     if (pathNode == NULL) {
         printf("Error while allocating memory for dijkstra\n");
@@ -440,8 +587,16 @@ pPath dijkstra(int src, int dst) {
     pPathNode lastPathNode = NULL;
 
     if (graph != NULL) {
-        int * dist = (int*) malloc(sizeof (int) * graph->size);
-        int * prev = (int*) malloc(sizeof (int) * graph->size);
+        int * dist;
+        int * prev;
+
+#ifndef USE_MPI_MALLOC
+        dist = (int*) malloc(sizeof (int) * graph->size);
+        prev = (int*) malloc(sizeof (int) * graph->size);
+#else
+        MPI_Alloc_mem(sizeof (int) * graph->size, MPI_INFO_NULL, &dist);
+        MPI_Alloc_mem(sizeof (int) * graph->size, MPI_INFO_NULL, &prev);
+#endif
 
         if (dist == NULL || prev == NULL) {
             printf("Error while allocating memory to run dijkstra...\n");
@@ -474,7 +629,11 @@ pPath dijkstra(int src, int dst) {
 
         } while (!found && !allStepped());
 
+#ifndef USE_MPI_MALLOC
         ret = (pPath) malloc(sizeof (Path));
+#else
+        MPI_Alloc_mem(sizeof (Path), MPI_INFO_NULL, &ret);
+#endif
 
         if (ret == NULL) {
             printf("Error while allocating memory for dijkstra\n");
@@ -490,8 +649,14 @@ pPath dijkstra(int src, int dst) {
 
         ret->first = addPathNode(u, lastPathNode);
 
+#ifndef USE_MPI_MALLOC
         free(prev);
         free(dist);
+#else
+        MPI_Free_mem(prev);
+        MPI_Free_mem(dist);
+#endif
+
     }
 
     return ret;
@@ -501,7 +666,11 @@ void createArtificialEdges(void) {
     if (graph != NULL && artificialEdges == NULL) {
         int i, j, size = graph->size;
 
+#ifndef USE_MPI_MALLOC
         artificialEdges = (pPath *) malloc(sizeof (pPath) * size * size);
+#else
+        MPI_Alloc_mem(sizeof (pPath) * size * size, MPI_INFO_NULL, &artificialEdges);
+#endif
 
         if (artificialEdges == NULL) {
             printf("Error while creating artificial edges\n");
@@ -538,7 +707,13 @@ void destroyArtificialEdges(void) {
                 }
             }
         }
+
+#ifndef USE_MPI_MALLOC
         free(artificialEdges);
+#else
+        MPI_Free_mem(artificialEdges);
+#endif
+
     }
 }
 
@@ -595,9 +770,17 @@ void destroyPath(pPath path) {
     while (it != NULL) {
         pPathNode old = it;
         it = it->next;
+#ifndef USE_MPI_MALLOC
         free(old);
+#else
+        MPI_Free_mem(old);
+#endif
     }
+#ifndef USE_MPI_MALLOC
     free(path);
+#else
+    MPI_Free_mem(path);
+#endif
 }
 
 void printRealPath(pPath p) {
@@ -625,7 +808,7 @@ void printRealPath(pPath p) {
     }
 }
 
-void test(void) {
+void test(int argc, char* argv[]) {
 
     /*
         createGraph(6);
@@ -641,21 +824,120 @@ void test(void) {
      */
 
     // src: http://www.emsampa.com.br/xspxrjint.htm
-    int graphSrc[11] = {
-        159, 269, 122, 118, 182, 170, 127, 132, 35, 166, 338
+    int graphSrc[3] = {
+        159, 269, 122//, 118, 182, 170, 127, 132, 35, 166, 338
     };
 
     int i;
-    int tam = 1 + 11;
+    int tam = 1 + 3;
+    int nCombinations;
+    int taskSize;
+    int taskIni;
+    int taskEnd;
+    int lower;
+    int key;
+    pPath p;
 
-    createGraph(tam);
+#ifdef USE_MPI_MALLOC
 
-    for (i = 1; i < tam; i++) {
-        int ini = 65; // A
-        addEdge('A', ini + i, graphSrc[i - 1]);
+    int rank, size;
+    MPI_Status status;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+#endif
+    
+    nCombinations = factorial(tam - 1) / 2;
+
+#ifdef USE_MPI_MALLOC
+    
+    if (rank == 0) {
+
+#endif
+        
+#ifdef GRAPH_PRINT_STEP
+        printf("nCombinations: %d\n", nCombinations);
+#endif
+
+        createGraph(tam);
+
+#ifdef USE_MPI_MALLOC
+        
+        for(i = 1; i < size; i++) {
+            MPI_Send(&graph, 1, MPI_AINT, i, 0, MPI_COMM_WORLD);
+        }
+
+#endif
+        
+        for (i = 1; i < tam; i++) {
+            int ini = 'A';
+            addEdge('A', ini + i, graphSrc[i - 1]);
+        }
+
+        sequentialSolution();
+
+#ifdef USE_MPI_MALLOC
+        
+        printf("Starting parallel run:\n");
+
+        startTimestamp();
+        createArtificialEdges();
+
+        taskSize = taskDivision(size, nCombinations);
+
+    } else {
+        int divRecv;
+        MPI_Recv(&graph, 1, MPI_AINT, 0, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&divRecv, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+        taskSize = divRecv;
     }
 
-    sequentialSolution();
+    taskIni = (nCombinations / size) * rank;
+    taskEnd = taskIni + taskSize - 1;
 
-    destroyGraph();
+#ifdef GRAPH_PRINT_STEP
+    printf("%d %d %d %d\n", rank, taskSize, taskIni, taskEnd);
+#endif
+
+    getLowerPath(0, taskIni, taskEnd, &lower, &key);
+
+    if (rank == 0) {
+        for (i = 1; i < size; i++) {
+            int l, k;
+            MPI_Recv(&l, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+            MPI_Recv(&k, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+            if (lower > l) {
+                lower = l;
+                key = k;
+            }
+        }
+
+        printf("%d %d\n\n", lower, key);
+
+        p = getPathFromIndex(0, key);
+
+        printRealPath(p);
+
+        destroyPath(p);
+
+        destroyArtificialEdges();
+        finishTimestamp();
+
+#endif
+        
+        destroyGraph();
+
+#ifdef USE_MPI_MALLOC
+        
+    } else {
+        MPI_Send(&lower, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(&key, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
+
+    MPI_Finalize();
+    
+#endif
+    
 }
