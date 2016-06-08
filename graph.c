@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 typedef struct {
     char id;
@@ -29,6 +30,7 @@ typedef struct {
     int size;
 } Graph, *pGraph;
 
+static unsigned long timestamp;
 static pGraph graph = NULL;
 static pPath * artificialEdges = NULL;
 
@@ -46,8 +48,37 @@ static pPath getPathFromIndex(int start, int idx);
 static unsigned int factorial(unsigned int n);
 static int getWeightFromNodes(pNode src, pNode dst);
 
+void startTimestamp(void) {
+    struct timespec spec;
+    time_t s;
+    unsigned long time_in_micros;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    s  = spec.tv_sec;
+    time_in_micros = 1000000 * spec.tv_sec + (spec.tv_nsec / 100000);
+    timestamp = time_in_micros;
+}
+
+unsigned long finishTimestamp(void) {
+    struct timespec spec;
+    time_t s;
+    unsigned long time_in_micros;
+    unsigned long ret;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    s  = spec.tv_sec;
+    time_in_micros = 1000000 * spec.tv_sec + (spec.tv_nsec / 100000);
+    ret = time_in_micros - timestamp;
+    timestamp = ret;
+    printf("Total time (millis): %lu\n", timestamp);
+    return ret;
+}
+
 unsigned int factorial(unsigned int n) {
-    return n <= 1 ? 1 : n * factorial(n - 1);
+    int i = 2;
+    int ret = 1;
+    for(; i <= n; i++) {
+        ret *= i;
+    }
+    return ret;
 }
 
 pPath getPathFromIndex(int start, int idx) {
@@ -428,16 +459,6 @@ void printRealPath(pPath p) {
 
 void test(void) {
     
-    /*
-    createGraph(4);
-    addEdge('A', 'B', 6);
-    addEdge('A', 'C', 2);
-    addEdge('A', 'D', 5);
-    addEdge('B', 'C', 9);
-    addEdge('B', 'D', 5);
-    addEdge('C', 'D', 6);
-    */
-    
     createGraph(6);
     addEdge('A', 'B', 7);
     addEdge('A', 'C', 9);
@@ -453,13 +474,17 @@ void test(void) {
     //printEdges();
     int fact = factorial(graph->size - 1);
     int i;
+    printf("Start sequential run:\n");
+    startTimestamp(); 
     for(i = 0; i < fact; i++) {
         getWeightFromIndex(0, i);
     }
+    finishTimestamp();
     pPath p = dijkstra(0, 2);
     printPath(p);
     printRealPath(p);
     destroyArtificialEdges();
     destroyPath(p);
     destroyGraph();
+
 }
