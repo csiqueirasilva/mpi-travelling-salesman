@@ -33,6 +33,7 @@ typedef struct {
 static unsigned long timestamp;
 static pGraph graph = NULL;
 static pPath * artificialEdges = NULL;
+static int * factorialHashTable = NULL;
 
 static void destroyPath(pPath path);
 static void printPath(pPath path);
@@ -47,13 +48,28 @@ static int getWeightFromIndex(int start, int idx);
 static pPath getPathFromIndex(int start, int idx);
 static unsigned int factorial(unsigned int n);
 static int getWeightFromNodes(pNode src, pNode dst);
+static void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey);
+
+void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey) {
+    int i;
+    *lower = INT_MAX;
+    *lowerKey = -1;
+
+    for (i = start; i < end; i++) {
+        int w = getWeightFromIndex(startNode, i);
+        if (w < *lower) {
+            *lower = w;
+            *lowerKey = i;
+        }
+    }
+}
 
 void startTimestamp(void) {
     struct timespec spec;
     time_t s;
     unsigned long time_in_micros;
     clock_gettime(CLOCK_REALTIME, &spec);
-    s  = spec.tv_sec;
+    s = spec.tv_sec;
     time_in_micros = 1000000 * spec.tv_sec + (spec.tv_nsec / 100000);
     timestamp = time_in_micros;
 }
@@ -64,7 +80,7 @@ unsigned long finishTimestamp(void) {
     unsigned long time_in_micros;
     unsigned long ret;
     clock_gettime(CLOCK_REALTIME, &spec);
-    s  = spec.tv_sec;
+    s = spec.tv_sec;
     time_in_micros = 1000000 * spec.tv_sec + (spec.tv_nsec / 100000);
     ret = time_in_micros - timestamp;
     timestamp = ret;
@@ -75,14 +91,99 @@ unsigned long finishTimestamp(void) {
 unsigned int factorial(unsigned int n) {
     int i = 2;
     int ret = 1;
-    for(; i <= n; i++) {
+    for (; i <= n; i++) {
         ret *= i;
     }
     return ret;
 }
 
 pPath getPathFromIndex(int start, int idx) {
+    pPath ret = (pPath) malloc(sizeof (Path));
+    pNode * others = (pNode*) malloc(sizeof (pNode) * (graph->size - 1));
+    pPathNode pathNode;
+    pPathNode lastPathNode = pathNode;
+    int countNotUsed = graph->size - 1;
+    int i, j;
+    pNode startNode = graph->nodes[start];
+    pNode src;
+    pNode dst;
 
+    if (others == NULL || ret == NULL) {
+        printf("ERROR WHILE ALLOCATING MEMORY TO GET WEIGHT FROM INDEX\n");
+        exit(-1);
+    }
+
+    ret->first = NULL;
+    ret->totalWeight = 0;
+
+    for (j = 0, i = 0; i < graph->size; i++) {
+        if (i != start) {
+            others[j++] = graph->nodes[i];
+        }
+    }
+
+    src = startNode;
+
+    pathNode = (pPathNode) malloc(sizeof (PathNode));
+
+    if (pathNode == NULL) {
+        printf("Error while allocating memory to create path\n");
+        exit(-1);
+    }
+
+    pathNode->node = src;
+    ret->first = pathNode;
+
+    while (countNotUsed-- > 0) {
+        lastPathNode = pathNode;
+        int size = (graph->size - (graph->size - countNotUsed));
+        int fact = factorialHashTable[size];
+        int dstCount = 0;
+        pNode selected = NULL;
+        int dstN = idx / fact;
+        idx %= fact;
+        for (i = 0; i < (graph->size - 1) && selected == NULL; i++) {
+            if (others[i] != NULL) {
+                if (dstCount++ == dstN) {
+                    selected = others[i];
+                    others[i] = NULL;
+                }
+            }
+        }
+
+        dst = selected;
+
+        ret->totalWeight += getWeightFromNodes(src, dst);
+        src = dst;
+
+        pathNode = (pPathNode) malloc(sizeof (PathNode));
+
+        if (pathNode == NULL) {
+            printf("Error while allocating memory to create path\n");
+            exit(-1);
+        }
+
+        pathNode->node = src;
+        lastPathNode->next = pathNode;
+    }
+
+    dst = startNode;
+    ret->totalWeight += getWeightFromNodes(src, dst);
+
+    pathNode = (pPathNode) malloc(sizeof (PathNode));
+
+    if (pathNode == NULL) {
+        printf("Error while allocating memory to create path\n");
+        exit(-1);
+    }
+
+    pathNode->node = dst;
+    pathNode->next = NULL;
+    lastPathNode->next = pathNode;
+
+    free(others);
+
+    return ret;
 }
 
 int getWeightFromNodes(pNode src, pNode dst) {
@@ -112,10 +213,10 @@ int getWeightFromIndex(int start, int idx) {
     src = startNode;
 
     printf("%d - %c", idx, src->id);
-    
+
     while (countNotUsed-- > 0) {
         int size = (graph->size - (graph->size - countNotUsed));
-        int fact = factorial(size);
+        int fact = factorialHashTable[size];
         int dstCount = 0;
         pNode selected = NULL;
         int dstN = idx / fact;
@@ -141,7 +242,7 @@ int getWeightFromIndex(int start, int idx) {
     printf("%c - %d\n", dst->id, ret);
 
     free(others);
-    
+
     return ret;
 }
 
@@ -181,6 +282,16 @@ void createGraph(int size) {
                     graph = NULL;
                     printf("Error while allocating memory to create graph\n");
                     exit(-1);
+                } else {
+                    factorialHashTable = (int*) malloc(sizeof (int) * size);
+                    if (factorialHashTable == NULL) {
+                        printf("Error while allocating memory to create factorial hash table\n");
+                        exit(-1);
+                    }
+
+                    for (i = 0; i < size; i++) {
+                        factorialHashTable[i] = factorial(i);
+                    }
                 }
 
             } else {
@@ -224,8 +335,10 @@ void destroyGraph(void) {
         free(graph->nodes);
         free(graph);
 
+        free(factorialHashTable);
     }
 
+    factorialHashTable = NULL;
     graph = NULL;
 }
 
@@ -458,7 +571,7 @@ void printRealPath(pPath p) {
 }
 
 void test(void) {
-    
+
     createGraph(6);
     addEdge('A', 'B', 7);
     addEdge('A', 'C', 9);
@@ -469,22 +582,29 @@ void test(void) {
     addEdge('C', 'F', 2);
     addEdge('D', 'E', 6);
     addEdge('F', 'E', 9);
-    
-    createArtificialEdges();
-    //printEdges();
-    int fact = factorial(graph->size - 1);
-    int i;
-    printf("Start sequential run:\n");
-    startTimestamp(); 
-    for(i = 0; i < fact; i++) {
-        getWeightFromIndex(0, i);
-    }
-    finishTimestamp();
-    pPath p = dijkstra(0, 2);
-    printPath(p);
-    printRealPath(p);
-    destroyArtificialEdges();
-    destroyPath(p);
-    destroyGraph();
 
+    startTimestamp();
+
+    createArtificialEdges();
+
+    {
+        int fact = factorialHashTable[graph->size - 1] / 2;
+        int lower;
+        int key;
+        pPath p;
+
+        printf("Start sequential run:\n");
+        getLowerPath(0, 0, fact, &lower, &key);
+
+        p = getPathFromIndex(0, key);
+        printPath(p);
+        printRealPath(p);
+        destroyPath(p);
+    }
+
+    destroyArtificialEdges();
+
+    finishTimestamp();
+
+    destroyGraph();
 }
