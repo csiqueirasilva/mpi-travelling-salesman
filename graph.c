@@ -1,5 +1,7 @@
 #include "graph.h"
 
+//#define GRAPH_PRINT_STEP 0
+
 #define TRUE 1
 #define FALSE 0
 #define UNDEFINED -1
@@ -37,6 +39,7 @@ static int * factorialHashTable = NULL;
 
 static void destroyPath(pPath path);
 static void printPath(pPath path);
+static void printRealPath(pPath p);
 static void destroyArtificialEdges(void);
 static void createArtificialEdges(void);
 static void initDijkstra(int * pathSizes, int * previous);
@@ -55,12 +58,45 @@ void getLowerPath(int startNode, int start, int end, int * lower, int * lowerKey
     *lower = INT_MAX;
     *lowerKey = -1;
 
-    for (i = start; i < end; i++) {
+    for (i = start; i <= end; i++) {
         int w = getWeightFromIndex(startNode, i);
         if (w < *lower) {
             *lower = w;
             *lowerKey = i;
         }
+    }
+}
+
+static void sequentialSolution(void);
+static unsigned long finishTimestamp(void);
+static void startTimestamp(void);
+
+void sequentialSolution(void) {
+    if (graph != NULL) {
+
+        startTimestamp();
+        createArtificialEdges();
+
+        {
+            int fact = factorialHashTable[graph->size - 1] / 2;
+            int lower;
+            int key;
+            pPath p;
+
+            printf("Start sequential run:\n");
+            getLowerPath(0, 0, fact, &lower, &key);
+
+            p = getPathFromIndex(0, key);
+
+            //printPath(p);
+            printRealPath(p);
+
+            destroyPath(p);
+        }
+
+        destroyArtificialEdges();
+        finishTimestamp();
+
     }
 }
 
@@ -70,7 +106,7 @@ void startTimestamp(void) {
     unsigned long time_in_micros;
     clock_gettime(CLOCK_REALTIME, &spec);
     s = spec.tv_sec;
-    time_in_micros = 1000000 * spec.tv_sec + (spec.tv_nsec / 100000);
+    time_in_micros = spec.tv_sec;
     timestamp = time_in_micros;
 }
 
@@ -81,10 +117,10 @@ unsigned long finishTimestamp(void) {
     unsigned long ret;
     clock_gettime(CLOCK_REALTIME, &spec);
     s = spec.tv_sec;
-    time_in_micros = 1000000 * spec.tv_sec + (spec.tv_nsec / 100000);
+    time_in_micros = spec.tv_sec;
     ret = time_in_micros - timestamp;
     timestamp = ret;
-    printf("Total time (millis): %lu\n", timestamp);
+    printf("Total time (seconds): %lu\n", timestamp);
     return ret;
 }
 
@@ -167,6 +203,7 @@ pPath getPathFromIndex(int start, int idx) {
         lastPathNode->next = pathNode;
     }
 
+    lastPathNode = pathNode;
     dst = startNode;
     ret->totalWeight += getWeightFromNodes(src, dst);
 
@@ -212,7 +249,9 @@ int getWeightFromIndex(int start, int idx) {
 
     src = startNode;
 
+#ifdef GRAPH_PRINT_STEP
     printf("%d - %c", idx, src->id);
+#endif
 
     while (countNotUsed-- > 0) {
         int size = (graph->size - (graph->size - countNotUsed));
@@ -231,7 +270,9 @@ int getWeightFromIndex(int start, int idx) {
         }
 
         dst = selected;
+#ifdef GRAPH_PRINT_STEP
         printf("%c", dst->id);
+#endif
         ret += getWeightFromNodes(src, dst);
         src = dst;
     }
@@ -239,7 +280,9 @@ int getWeightFromIndex(int start, int idx) {
     dst = startNode;
     ret += getWeightFromNodes(src, dst);
 
+#ifdef GRAPH_PRINT_STEP
     printf("%c - %d\n", dst->id, ret);
+#endif
 
     free(others);
 
@@ -508,7 +551,7 @@ int getCircularPathWeight(int index);
 
  */
 
-static void addEdge(char srcChar, char dstChar, int weight) {
+static void addEdge(int srcChar, int dstChar, int weight) {
     int src = srcChar - 'A';
     int dst = dstChar - 'A';
     graph->edges[src * graph->size + dst] =
@@ -559,52 +602,60 @@ void destroyPath(pPath path) {
 
 void printRealPath(pPath p) {
     if (graph != NULL && artificialEdges != NULL) {
-        if (p != NULL && p->first != NULL && p->first->next != NULL) {
-            int b = p->first->node->id - 'A';
-            int e = p->first->next->node->id - 'A';
-            pPath realPath = artificialEdges[b * graph->size + e];
-            if (realPath != NULL) {
-                printPath(realPath);
+        pPathNode pathNode = p->first;
+        while (pathNode != NULL) {
+            if (pathNode->next == NULL) {
+                printf("%c\n", pathNode->node->id);
+            } else {
+                int b = pathNode->node->id - 'A';
+                int e = pathNode->next->node->id - 'A';
+                pPath realPath = artificialEdges[b * graph->size + e];
+                if (realPath != NULL) {
+                    pPathNode it = realPath->first;
+                    while (it != NULL && it->next != NULL) {
+                        printf("%c ", it->node->id);
+                        it = it->next;
+                    }
+                } else {
+                    printf("%c ", pathNode->node->id);
+                }
             }
+            pathNode = pathNode->next;
         }
     }
 }
 
 void test(void) {
 
-    createGraph(6);
-    addEdge('A', 'B', 7);
-    addEdge('A', 'C', 9);
-    addEdge('A', 'F', 14);
-    addEdge('B', 'C', 10);
-    addEdge('B', 'D', 15);
-    addEdge('C', 'D', 11);
-    addEdge('C', 'F', 2);
-    addEdge('D', 'E', 6);
-    addEdge('F', 'E', 9);
+    /*
+        createGraph(6);
+        addEdge('A', 'B', 7);
+        addEdge('A', 'C', 9);
+        addEdge('A', 'F', 14);
+        addEdge('B', 'C', 10);
+        addEdge('B', 'D', 15);
+        addEdge('C', 'D', 11);
+        addEdge('C', 'F', 2);
+        addEdge('D', 'E', 6);
+        addEdge('F', 'E', 9);
+     */
 
-    startTimestamp();
+    // src: http://www.emsampa.com.br/xspxrjint.htm
+    int graphSrc[11] = {
+        159, 269, 122, 118, 182, 170, 127, 132, 35, 166, 338
+    };
 
-    createArtificialEdges();
+    int i;
+    int tam = 1 + 11;
 
-    {
-        int fact = factorialHashTable[graph->size - 1] / 2;
-        int lower;
-        int key;
-        pPath p;
+    createGraph(tam);
 
-        printf("Start sequential run:\n");
-        getLowerPath(0, 0, fact, &lower, &key);
-
-        p = getPathFromIndex(0, key);
-        printPath(p);
-        printRealPath(p);
-        destroyPath(p);
+    for (i = 1; i < tam; i++) {
+        int ini = 65; // A
+        addEdge('A', ini + i, graphSrc[i - 1]);
     }
 
-    destroyArtificialEdges();
-
-    finishTimestamp();
+    sequentialSolution();
 
     destroyGraph();
 }
