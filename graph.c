@@ -130,7 +130,7 @@ void sequentialSolution(void) {
 
             p = getPathFromIndex(0, key);
 
-            //printPath(p);
+            printPath(p);
             printRealPath(p);
 
             destroyPath(p);
@@ -665,31 +665,47 @@ pPath dijkstra(int src, int dst) {
 void createArtificialEdges(void) {
     if (graph != NULL && artificialEdges == NULL) {
         int i, j, size = graph->size;
-
+        int * buffer;
+        
 #ifndef USE_MPI_MALLOC
         artificialEdges = (pPath *) malloc(sizeof (pPath) * size * size);
+        buffer = (int *) malloc(sizeof (int) * size * size);
+        
 #else
         MPI_Alloc_mem(sizeof (pPath) * size * size, MPI_INFO_NULL, &artificialEdges);
+        MPI_Alloc_mem(sizeof (int) * size * size, MPI_INFO_NULL, &buffer);
 #endif
-
-        if (artificialEdges == NULL) {
+        
+        if (artificialEdges == NULL || buffer == NULL) {
             printf("Error while creating artificial edges\n");
             exit(-1);
         }
 
+        for(i = 0; i < size * size; i++) {
+            buffer[i] = 0;
+        }
+        
         for (i = 0; i < size; i++) {
             for (j = 0; j < size; j++) {
                 int edge = i * size + j;
-                if (graph->edges[edge] == 0 && i != j) {
+                if (graph->edges[edge] == 0 && artificialEdges[edge] == NULL && i != j) {
                     int reverseEdge = j * size + i;
                     pPath p = dijkstra(i, j);
-                    graph->edges[edge] = graph->edges[reverseEdge] = p->totalWeight;
+                    buffer[edge] = buffer[reverseEdge] = p->totalWeight;
                     artificialEdges[edge] = artificialEdges[reverseEdge] = p;
                 } else {
                     artificialEdges[edge] = NULL;
                 }
             }
         }
+        
+        for(i = 0; i < size * size; i++) {
+            if(buffer[i] != 0) {
+                graph->edges[i] = buffer[i];
+            }
+        }
+        
+        free(buffer);
     }
 }
 
@@ -810,26 +826,13 @@ void printRealPath(pPath p) {
 
 void test(int argc, char* argv[]) {
 
-    /*
-        createGraph(6);
-        addEdge('A', 'B', 7);
-        addEdge('A', 'C', 9);
-        addEdge('A', 'F', 14);
-        addEdge('B', 'C', 10);
-        addEdge('B', 'D', 15);
-        addEdge('C', 'D', 11);
-        addEdge('C', 'F', 2);
-        addEdge('D', 'E', 6);
-        addEdge('F', 'E', 9);
-     */
-
     // src: http://www.emsampa.com.br/xspxrjint.htm
-    int graphSrc[3] = {
-        159, 269, 122//, 118, 182, 170, 127, 132, 35, 166, 338
+    int graphSrc[6] = {
+        159, 269, 122, 118, 182, 170//, 127, 132, 35, 166, 338
     };
 
     int i;
-    int tam = 1 + 3;
+    int tam = 1 + 6;
     int nCombinations;
     int taskSize;
     int taskIni;
@@ -855,27 +858,39 @@ void test(int argc, char* argv[]) {
     
     if (rank == 0) {
 
+        createGraph(tam);
+        
 #endif
         
 #ifdef GRAPH_PRINT_STEP
         printf("nCombinations: %d\n", nCombinations);
 #endif
 
-        createGraph(tam);
+        createGraph(6);
+        addEdge('A', 'B', 700);
+        addEdge('A', 'C', 119);
+        addEdge('A', 'F', 14);
+        addEdge('B', 'C', 109);
+        addEdge('B', 'D', 15);
+        addEdge('C', 'D', 11);
+        addEdge('C', 'F', 2);
+        addEdge('D', 'E', 6);
+        addEdge('F', 'E', 9);
 
+        
 #ifdef USE_MPI_MALLOC
         
         for(i = 1; i < size; i++) {
             MPI_Send(&graph, 1, MPI_AINT, i, 0, MPI_COMM_WORLD);
         }
 
-#endif
-        
         for (i = 1; i < tam; i++) {
             int ini = 'A';
             addEdge('A', ini + i, graphSrc[i - 1]);
         }
-
+        
+#endif
+        
         sequentialSolution();
 
 #ifdef USE_MPI_MALLOC
