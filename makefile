@@ -1,5 +1,5 @@
 main: main.c graph.c
-	mpicc main.c graph.c -o main
+	gcc -o main main.c graph.c -I. -g
 
 clean:
 	rm -rf main
