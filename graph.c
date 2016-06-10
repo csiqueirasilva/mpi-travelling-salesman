@@ -683,6 +683,7 @@ void createArtificialEdges(void) {
 
         for(i = 0; i < size * size; i++) {
             buffer[i] = 0;
+            artificialEdges[i] = NULL; 
         }
         
         for (i = 0; i < size; i++) {
@@ -691,10 +692,10 @@ void createArtificialEdges(void) {
                 if (graph->edges[edge] == 0 && artificialEdges[edge] == NULL && i != j) {
                     int reverseEdge = j * size + i;
                     pPath p = dijkstra(i, j);
+                    pPath pReverse = dijkstra(j, i);
                     buffer[edge] = buffer[reverseEdge] = p->totalWeight;
-                    artificialEdges[edge] = artificialEdges[reverseEdge] = p;
-                } else {
-                    artificialEdges[edge] = NULL;
+                    artificialEdges[edge] = p;
+                    artificialEdges[reverseEdge] = pReverse;
                 }
             }
         }
